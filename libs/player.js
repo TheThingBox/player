@@ -15,14 +15,12 @@ import lame from 'lame'
 import _ from 'underscore'
 import Speaker from 'speaker'
 import PoolStream from 'pool_stream'
-import Volume from 'pcm-volume'
 import { EventEmitter } from "events"
 import { fetchName, splitName, format, getProgress, chooseRandom } from './utils'
 
 const defaults = {
   'src': 'src',
   'cache': false,
-  'stream': false,
   'shuffle': false,
   'downloads': home(),
   'http_proxy': process.env.HTTP_PROXY || process.env.http_proxy || null,
@@ -104,16 +102,16 @@ export default class Player extends EventEmitter {
       })
 
       this.lameStream = new lame.Decoder()
-
+      self.pool = pool
       pool
+        .on("error",onError)
         .pipe(this.lameStream)
         .once('format', onPlaying)
         .once('finish', () => this.next())
 
       function onPlaying(f) {
         self.lameFormat = f
-        var speaker = new Volume()
-        speaker.pipe(new Speaker(self.lameFormat))
+        var speaker = new Speaker(self.lameFormat)
 
         self.speaker = {
           'readableStream': this,
@@ -130,6 +128,10 @@ export default class Player extends EventEmitter {
           .once('close', () => 
             self.emit('playend', song))
       }
+      
+      function onError(err) {
+        self.emit('error', err)
+      }
     })
 
     return this
@@ -137,13 +139,24 @@ export default class Player extends EventEmitter {
 
   /**
    * [Set playback volume]
-   * @param  {Number}   volume   [Volume level percentage 0.0-1.0]
+   * @param  {Number}   volume   [Volume level percentage 0-100]
    */
    setVolume(volume) {
        if(!this.speaker)
-           return;
+           return null;
 
-       this.speaker.Speaker.setVolume(volume);
+       return this.lameStream.setVolume(volume);
+   }
+   
+  /**
+   * [get playback volume]
+   * @return  {Number}   volume   [Volume level 0-100]
+   */
+   getVolume() {
+       if(!this.speaker)
+           return null;
+           
+       return this.lameStream.getVolume()*100;
    }
 
   /**
@@ -175,16 +188,14 @@ export default class Player extends EventEmitter {
    */
   pause() {
     if (this.paused) {
-      this.speaker.Speaker = new Volume()
-      this.speaker.Speaker.pipe(new Speaker(this.lameFormat))
-
+      this.speaker.Speaker = new Speaker(this.lameFormat))
       this.lameStream.pipe(this.speaker.Speaker)
     } else {
       this.speaker.Speaker.end()
     }
 
     this.paused = !this.paused
-    return this	
+    return this
   }
 
   /**
@@ -203,6 +214,9 @@ export default class Player extends EventEmitter {
     this.speaker
       .Speaker
       .end()
+      
+    if (this.pool && this.pool.socket)
+      this.pool.destroy()
 
     return
   }
@@ -213,6 +227,7 @@ export default class Player extends EventEmitter {
    * @return {player} this
    */
   next() {
+    this.lameStream = null
     let list = this._list
     let current = this.playing
     let nextIndex = this.options.shuffle ? 
@@ -280,11 +295,14 @@ export default class Player extends EventEmitter {
       var isOk = (res.statusCode === 200)
       var isAudio = (res.headers['content-type'].indexOf('audio/mpeg') > -1)
       var isSave = self.options.cache
-      var isStream = self.options.stream
 
-      if (!isOk)
-        return callback(new Error('Resource invalid'))
-      if (isStream)
+      if (!isOk) {
+        if(res.statusCode > 299 && res.statusCode < 400 && (res.headers['Location'] || res.headers['location']))
+          return self.download(res.headers['Location']  || res.headers['location'], callback)
+        else
+          return callback(new Error('Resource invalid'))
+      }
+      if (!isSave)
         return callback(null, res)
       if (!isAudio)
         return callback(new Error('Resource type is unsupported'))
@@ -293,10 +311,6 @@ export default class Player extends EventEmitter {
       var pool = new PoolStream()
       // Pipe into memory
       res.pipe(pool)
-
-      // Check if we're going to save this stream
-      if (!isSave)
-        return callback(null, pool)
 
       // Save this stream as file in download directory
       var file = path.join(
