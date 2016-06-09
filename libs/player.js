@@ -188,7 +188,7 @@ export default class Player extends EventEmitter {
    */
   pause() {
     if (this.paused) {
-      this.speaker.Speaker = new Speaker(this.lameFormat))
+      this.speaker.Speaker = new Speaker(this.lameFormat)
       this.lameStream.pipe(this.speaker.Speaker)
     } else {
       this.speaker.Speaker.end()
