@@ -2,7 +2,7 @@
   "name": "player",
   "version": "0.6.2",
   "description": "a command line player, supports play mp3 both from url and local stream.",
-  "main": "dist/player.js",
+  "main": "libs/player.js",
   "bin": "bin/cli",
   "scripts": {
     "build": "node_modules/.bin/babel libs --out-dir dist --source-maps",

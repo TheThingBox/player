@@ -1,3 +1,5 @@
+"use strict";
+
 /**
 *
 * Command line interface mp3 player based on Node.js
@@ -6,17 +8,22 @@
 *
 **/
 
-import fs from 'fs'
-import path from 'path'
-import util from "util"
-import { http, https } from 'follow-redirects'
-import home from 'home'
-import lame from 'lame'
-import _ from 'underscore'
-import Speaker from 'speaker'
-import PoolStream from 'pool_stream'
-import { EventEmitter } from "events"
-import { fetchName, splitName, format, getProgress, chooseRandom } from './utils'
+var fs = require( 'fs');
+var path = require( 'path');
+var util = require( "util");
+var http = require( 'follow-redirects').http;
+var https = require( 'follow-redirects').https;
+var home = require( 'home');
+var lame = require( 'lame');
+var _ = require( 'underscore');
+var Speaker = require( 'speaker');
+var PoolStream = require( 'pool_stream');
+var EventEmitter = require( "events").EventEmitter;
+var fetchName = require( './utils').fetchName; 
+var splitName = require( './utils').splitName;
+var format = require( './utils').format;
+var getProgress = require( './utils').getProgress;
+var chooseRandom = require( './utils').chooseRandom;
 
 const defaults = {
   'src': 'src',
@@ -31,7 +38,7 @@ const defaults = {
  * @param {Array|String} songs  [A list of songs or a single song URI string.]
  * @param {Object}       params [Optional options when init a instance]
  */
-export default class Player extends EventEmitter {
+class Player extends EventEmitter {
   constructor(songs, params) {
 //    if (!songs)
 //      return
@@ -81,7 +88,8 @@ export default class Player extends EventEmitter {
    * [Play a MP3 encoded audio file]
    * @param  {Number} index [the selected index of first played song]
    */
-  play(index = 0) {
+  play(index) {
+    if(!index) index = 0;
     if (this._list.length <= 0)
       return
     if (!_.isNumber(index))
@@ -102,7 +110,9 @@ export default class Player extends EventEmitter {
       })
 
       this.lameStream = new lame.Decoder()
+
       self.pool = pool
+
       pool
         .on("error",onError)
         .pipe(this.lameStream)
@@ -381,3 +391,4 @@ export default class Player extends EventEmitter {
     )
   }
 }
+module.exports = Player;
