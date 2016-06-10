@@ -149,25 +149,25 @@ class Player extends EventEmitter {
 
   /**
    * [Set playback volume]
-   * @param  {Number}   volume   [Volume level percentage 0-100]
+   * @param  {Number}   volume   [Volume level percentage 0.0-1.0]
    */
-   setVolume(volume) {
-       if(!this.speaker)
-           return null;
+  setVolume(volume) {
+      if(!this.speaker)
+          return null;
 
-       return this.lameStream.setVolume(volume);
-   }
+      return this.lameStream.setVolume(volume);
+  }
    
   /**
    * [get playback volume]
-   * @return  {Number}   volume   [Volume level 0-100]
+   * @return  {Number}   volume   [Volume level 0.0-1.0]
    */
-   getVolume() {
-       if(!this.speaker)
-           return null;
-           
-       return this.lameStream.getVolume()*100;
-   }
+  getVolume() {
+      if(!this.speaker)
+          return null;
+         
+      return this.lameStream.getVolume();
+  }
 
   /**
    * [Read MP3 src and check if we're going to download it.]
