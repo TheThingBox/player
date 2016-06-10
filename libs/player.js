@@ -17,6 +17,7 @@ var home = require( 'home');
 var lame = require( 'lame');
 var _ = require( 'underscore');
 var Speaker = require( 'speaker');
+var Volume = require( 'pcm-volume');
 var PoolStream = require( 'pool_stream');
 var EventEmitter = require( "events").EventEmitter;
 var fetchName = require( './utils').fetchName; 
@@ -121,7 +122,8 @@ class Player extends EventEmitter {
 
       function onPlaying(f) {
         self.lameFormat = f
-        var speaker = new Speaker(self.lameFormat)
+        var speaker = new Volume()
+        speaker.pipe(new Speaker(self.lameFormat))
 
         self.speaker = {
           'readableStream': this,
@@ -155,7 +157,7 @@ class Player extends EventEmitter {
       if(!this.speaker)
           return null;
 
-      return this.lameStream.setVolume(volume);
+      return this.speaker.Speaker.setVolume(volume);
   }
    
   /**
@@ -165,8 +167,8 @@ class Player extends EventEmitter {
   getVolume() {
       if(!this.speaker)
           return null;
-         
-      return this.lameStream.getVolume();
+
+      return this.speaker.Speaker.getVolume();
   }
 
   /**
@@ -198,7 +200,9 @@ class Player extends EventEmitter {
    */
   pause() {
     if (this.paused) {
-      this.speaker.Speaker = new Speaker(this.lameFormat)
+      this.speaker.Speaker = new Volume()
+      this.speaker.Speaker.pipe(new Speaker(this.lameFormat))
+
       this.lameStream.pipe(this.speaker.Speaker)
     } else {
       this.speaker.Speaker.end()
