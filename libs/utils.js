@@ -1,6 +1,4 @@
-"use strict";
-
-function fetchName(str) {
+export function fetchName(str) {
   var filename = str.substr(str.lastIndexOf('/') + 1)
 
   // Escape URI like this: `http://domain.com/xxx.mp3?xcode=fasda`
@@ -12,7 +10,7 @@ function fetchName(str) {
   return filename
 }
 
-function format(list, srcKey) {
+export function format(list, srcKey) {
   var songs = []
 
   if (typeof(list) === 'string') {
@@ -48,7 +46,7 @@ function format(list, srcKey) {
   return songs
 }
 
-function chooseRandom(arr) {
+export function chooseRandom(arr) {
   if (!arr || !arr.length)
     return 0
 
@@ -58,7 +56,7 @@ function chooseRandom(arr) {
   return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
-function getProgress(p, t, info) {
+export function getProgress(p, t, info) {
   var bar = ''
   bar += ('Now playing: ' + info)
   bar += '\n['
@@ -74,14 +72,6 @@ function getProgress(p, t, info) {
   return bar
 }
 
-function splitName(str) {
+export function splitName(str) {
   return str.split('/').pop()
-}
-
-module.exports = {
-  fetchName:fetchName,
-  format:format,
-  chooseRandom:chooseRandom,
-  getProgress:getProgress,
-  splitName:splitName
 }

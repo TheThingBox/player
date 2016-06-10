@@ -1,8 +1,8 @@
-var path = require('path');
-var keypress = require('keypress');
-var Player = require('./player.js');
+import path from 'path'
+import keypress from 'keypress'
+import Player from '../dist/player'
 
-module.exports = function() {
+export default function() {
   var command = process.argv[2]
   if (!command)
     return
