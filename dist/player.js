@@ -1,0 +1,450 @@
+/**
+*
+* Command line interface mp3 player based on Node.js
+* @Author:   [turingou](http://guoyu.me)
+* @Created:  [2013/07/20]
+*
+**/
+
+'use strict';
+
+Object.defineProperty(exports, '__esModule', {
+  value: true
+});
+
+var _createClass = (function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ('value' in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; })();
+
+var _get = function get(_x2, _x3, _x4) { var _again = true; _function: while (_again) { var object = _x2, property = _x3, receiver = _x4; desc = parent = getter = undefined; _again = false; if (object === null) object = Function.prototype; var desc = Object.getOwnPropertyDescriptor(object, property); if (desc === undefined) { var parent = Object.getPrototypeOf(object); if (parent === null) { return undefined; } else { _x2 = parent; _x3 = property; _x4 = receiver; _again = true; continue _function; } } else if ('value' in desc) { return desc.value; } else { var getter = desc.get; if (getter === undefined) { return undefined; } return getter.call(receiver); } } };
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { 'default': obj }; }
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError('Cannot call a class as a function'); } }
+
+function _inherits(subClass, superClass) { if (typeof superClass !== 'function' && superClass !== null) { throw new TypeError('Super expression must either be null or a function, not ' + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
+
+var _fs = require('fs');
+
+var _fs2 = _interopRequireDefault(_fs);
+
+var _path = require('path');
+
+var _path2 = _interopRequireDefault(_path);
+
+var _util = require('util');
+
+var _util2 = _interopRequireDefault(_util);
+
+var _followRedirects = require('follow-redirects');
+
+var _home = require('home');
+
+var _home2 = _interopRequireDefault(_home);
+
+var _lame = require('lame');
+
+var _lame2 = _interopRequireDefault(_lame);
+
+var _underscore = require('underscore');
+
+var _underscore2 = _interopRequireDefault(_underscore);
+
+var _speaker = require('speaker');
+
+var _speaker2 = _interopRequireDefault(_speaker);
+
+var _pcmVolume = require('pcm-volume');
+
+var _pcmVolume2 = _interopRequireDefault(_pcmVolume);
+
+var _pool_stream = require('pool_stream');
+
+var _pool_stream2 = _interopRequireDefault(_pool_stream);
+
+var _events = require('events');
+
+var _utils = require('./utils');
+
+var defaults = {
+  'src': 'src',
+  'cache': false,
+  'shuffle': false,
+  'downloads': (0, _home2['default'])(),
+  'http_proxy': process.env.HTTP_PROXY || process.env.http_proxy || null
+};
+
+/**
+ * [Class Player]
+ * @param {Array|String} songs  [A list of songs or a single song URI string.]
+ * @param {Object}       params [Optional options when init a instance]
+ */
+
+var Player = (function (_EventEmitter) {
+  _inherits(Player, _EventEmitter);
+
+  function Player(songs, params) {
+    _classCallCheck(this, Player);
+
+    //    if (!songs)
+    //      return
+
+    // Inherits eventEmitter
+    _get(Object.getPrototypeOf(Player.prototype), 'constructor', this).call(this);
+
+    this.history = [];
+    this.paused = false;
+    this.options = _underscore2['default'].extend(defaults, params);
+    this._list = (0, _utils.format)(songs || [], this.options.src);
+    if (!this._list || !this._list.length) this._list = [];
+  }
+
+  // Enable or disable a option
+
+  _createClass(Player, [{
+    key: 'enable',
+    value: function enable(k) {
+      this.options[k] = true;
+      return this;
+    }
+  }, {
+    key: 'disable',
+    value: function disable(k) {
+      this.options[k] = false;
+      return this;
+    }
+
+    /**
+     * [Lists songs in the playlist,
+     * Displays the src for each song returned in array,
+     * Access with prop `player.list`]
+     */
+  }, {
+    key: 'play',
+
+    /**
+     * [Play a MP3 encoded audio file]
+     * @param  {Number} index [the selected index of first played song]
+     */
+    value: function play() {
+      var _this = this;
+
+      var index = arguments.length <= 0 || arguments[0] === undefined ? 0 : arguments[0];
+
+      if (this._list.length <= 0) return;
+      if (!_underscore2['default'].isNumber(index)) index = 0;
+      if (index >= this._list.length) index = this._list.length - 1;
+
+      var self = this;
+      var song = this._list[index];
+
+      this.paused = false;
+      this.read(song[this.options.src], function (err, pool) {
+        if (err) return _this.emit('error', err);
+
+        _this.meta(pool, function (err, data) {
+          if (!err) song.meta = data;
+        });
+
+        _this.lameStream = new _lame2['default'].Decoder();
+
+        self.pool = pool;
+
+        pool.on("error", onError).pipe(_this.lameStream).once('format', onPlaying).once('finish', function () {
+          return _this.next();
+        });
+
+        function onPlaying(f) {
+          self.lameFormat = f;
+          var speaker = new _pcmVolume2['default']();
+          speaker.pipe(new _speaker2['default'](self.lameFormat));
+
+          self.speaker = {
+            'readableStream': this,
+            'Speaker': speaker
+          };
+
+          self.emit('playing', song);
+          self.history.push(index);
+
+          // This is where the song acturaly played end,
+          // can't trigger playend event here cause
+          // unpipe will fire this speaker's close event.
+          this.pipe(speaker).once('close', function () {
+            return self.emit('playend', song);
+          });
+        }
+
+        function onError(err) {
+          self.emit('error', err);
+        }
+      });
+
+      return this;
+    }
+
+    /**
+     * [Set playback volume]
+     * @param  {Number}   volume   [Volume level percentage 0.0-1.0]
+     */
+  }, {
+    key: 'setVolume',
+    value: function setVolume(volume) {
+      if (!this.speaker) return null;
+
+      return this.speaker.Speaker.setVolume(volume);
+    }
+
+    /**
+     * [get playback volume]
+     * @return  {Number}   volume   [Volume level 0.0-1.0]
+     */
+  }, {
+    key: 'getVolume',
+    value: function getVolume() {
+      if (!this.speaker) return null;
+
+      return this.speaker.Speaker.getVolume();
+    }
+
+    /**
+     * [Read MP3 src and check if we're going to download it.]
+     * @param  {String}   src      [MP3 file src, would be local path or URI (http/https)]
+     * @param  {Function} callback [callback with err and file stream]
+     */
+  }, {
+    key: 'read',
+    value: function read(src, callback) {
+      var isLocal = !(src.indexOf('http') == 0 || src.indexOf('https') == 0);
+
+      // Read local file stream if not a valid URI
+      if (isLocal) return callback(null, _fs2['default'].createReadStream(src));
+
+      var file = _path2['default'].join(this.options.downloads, (0, _utils.fetchName)(src));
+
+      if (_fs2['default'].existsSync(file)) return callback(null, _fs2['default'].createReadStream(file));
+
+      this.download(src, callback);
+    }
+
+    /**
+     * [Pause or resume audio]
+     * @return {player} this
+     */
+  }, {
+    key: 'pause',
+    value: function pause() {
+      if (this.paused) {
+        this.speaker.Speaker = new _pcmVolume2['default']();
+        this.speaker.Speaker.pipe(new _speaker2['default'](this.lameFormat));
+
+        this.lameStream.pipe(this.speaker.Speaker);
+      } else {
+        this.speaker.Speaker.end();
+      }
+
+      this.paused = !this.paused;
+      return this;
+    }
+
+    /**
+     * [Stop playing and unpipe stream.
+     * No params for now.]
+     * @return {Bool} [always `false`]
+     */
+  }, {
+    key: 'stop',
+    value: function stop() {
+      if (!this.speaker) return;
+
+      this.speaker.readableStream.unpipe();
+
+      this.speaker.Speaker.end();
+
+      if (this.pool && this.pool.socket) this.pool.destroy();
+
+      return;
+    }
+
+    /**
+     * [Stop playing and switch to next song,
+     * if there is no next song, trigger a `No next song` error event]
+     * @return {player} this
+     */
+  }, {
+    key: 'next',
+    value: function next() {
+      this.lameStream = null;
+      var list = this._list;
+      var current = this.playing;
+      var nextIndex = this.options.shuffle ? (0, _utils.chooseRandom)(_underscore2['default'].difference(list, [current._id])) : current._id + 1;
+
+      if (nextIndex >= list.length) {
+        this.emit('error', 'No next song was found');
+        this.emit('finish', current);
+        return this;
+      }
+
+      this.stop();
+      this.play(nextIndex);
+
+      return this;
+    }
+
+    /**
+     * [Add a new song to the playlist,
+     * If provided `song` is a String, it will be converted to a `Song` Object.]
+     * @param {String|Object} song [src URI of new song or the object of new song.]
+     */
+  }, {
+    key: 'add',
+    value: function add(song) {
+      var latest = _underscore2['default'].isObject(song) ? song : {};
+
+      latest._id = this._list.length;
+
+      if (_underscore2['default'].isString(song)) {
+        latest._name = (0, _utils.splitName)(song);
+        latest[this.options.src] = song;
+      }
+
+      this._list.push(latest);
+    }
+
+    /**
+     * [Download a mp3 file from its URI]
+     * @param  {String}   src      [the src URI of mp3 file]
+     * @param  {Function} callback [callback with err and file stream]
+     */
+  }, {
+    key: 'download',
+    value: function download(src, callback) {
+      var self = this;
+      var called = false;
+      var proxyReg = /http:\/\/((?:\d{1,3}\.){3}\d{1,3}):(\d+)/;
+      var http_proxy = self.options.http_proxy;
+      var request = src.indexOf('https') === 0 ? _followRedirects.https : _followRedirects.http;
+      var query = src;
+
+      if (http_proxy && proxyReg.test(http_proxy)) {
+        var proxyGroup = http_proxy.match(proxyReg);
+        query = {};
+        query.path = src;
+        query.host = proxyGroup[1];
+        query.port = proxyGroup[2];
+      }
+
+      request.get(query, responseHandler).once('error', errorHandler);
+
+      function responseHandler(res) {
+        called = true;
+
+        var isOk = res.statusCode === 200;
+        var isAudio = res.headers['content-type'].indexOf('audio/mpeg') > -1;
+        var isSave = self.options.cache;
+
+        if (!isOk) {
+          if (res.statusCode > 299 && res.statusCode < 400 && (res.headers['Location'] || res.headers['location'])) return self.download(res.headers['Location'] || res.headers['location'], callback);else return callback(new Error('Resource invalid'));
+        }
+        if (!isSave) return callback(null, res);
+        if (!isAudio) return callback(new Error('Resource type is unsupported'));
+
+        // Create a pool
+        var pool = new _pool_stream2['default']();
+        // Pipe into memory
+        res.pipe(pool);
+
+        // Save this stream as file in download directory
+        var file = _path2['default'].join(self.options.downloads, (0, _utils.fetchName)(src));
+
+        self.emit('downloading', src);
+        pool.pipe(_fs2['default'].createWriteStream(file));
+
+        // Callback the pool
+        callback(null, pool);
+      }
+
+      function errorHandler(err) {
+        if (!called) callback(err);
+      }
+    }
+
+    // Fetch metadata from local or remote mp3 stream
+  }, {
+    key: 'meta',
+    value: function meta(stream, callback) {
+      var _this2 = this;
+
+      try {
+        var mm = require('musicmetadata');
+      } catch (err) {
+        return callback(err);
+      }
+
+      var options = {
+        'duration': true
+      };
+
+      stream.on('error', function (err) {
+        return _this2.emit('error', '出错了 ' + err.code + ': ' + err.path);
+      });
+
+      return mm(stream, options, callback);
+    }
+
+    // Format metadata with template
+    // And output to `stdout`
+  }, {
+    key: 'progress',
+    value: function progress(metadata) {
+      var total = 70;
+      var info = metadata.title;
+      var duration = parseInt(metadata.duration);
+      var dots = total - 1;
+      var speed = duration * 1000 / total;
+      var stdout = process.stdout;
+
+      require('async').doWhilst(function (callback) {
+        // Clear console
+        stdout.write('\u001b[2J\u001b[0;0f');
+
+        // Move cursor to beginning of line
+        stdout.cursorTo(0);
+        stdout.write((0, _utils.getProgress)(total - dots, total, info));
+
+        setTimeout(callback, speed);
+
+        dots--;
+      }, function () {
+        return dots > 0;
+      }, function (done) {
+        stdout.moveCursor(0, -1);
+        stdout.clearLine();
+        stdout.cursorTo(0);
+      });
+    }
+  }, {
+    key: 'list',
+    get: function get() {
+      var _this3 = this;
+
+      if (!this._list) return;
+
+      return this._list.map(function (el) {
+        return el[_this3.options.src];
+      });
+    }
+
+    // Get the lastest playing song
+  }, {
+    key: 'playing',
+    get: function get() {
+      if (!this.history.length) return null;
+
+      return this._list[this.history[this.history.length - 1]];
+    }
+  }]);
+
+  return Player;
+})(_events.EventEmitter);
+
+exports['default'] = Player;
+module.exports = exports['default'];
