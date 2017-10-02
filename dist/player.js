@@ -338,7 +338,10 @@ var Player = (function (_EventEmitter) {
         called = true;
 
         var isOk = res.statusCode === 200;
-        var isAudio = res.headers['content-type'].indexOf('audio/mpeg') > -1;
+        var isAudio = false;
+        if(res.headers.hasOwnProperty('content-type')){
+          isAudio = res.headers['content-type'].indexOf('audio/mpeg') > -1;
+        }
         var isSave = self.options.cache;
 
         if (!isOk) {
